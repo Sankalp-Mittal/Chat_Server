@@ -1,15 +1,15 @@
-#include <iostream>  // For input/output operations
-#include <cstring>   // For string manipulation functions
-#include <unistd.h>  // For close() and read() system calls
-#include <sys/socket.h> // For socket-related functions
-#include <netinet/in.h> // For sockaddr_in structure
-#include <arpa/inet.h>  // For inet-related functions
-#include <mutex>        // For thread-safe access to shared resources
-#include <thread>       // For multi-threading support
-#include <vector>       // For dynamic array to manage threads
-#include <map>          // For storing username-password pairs
+#include <iostream>  
+#include <cstring>   
+#include <unistd.h>  
+#include <sys/socket.h> 
+#include <netinet/in.h> 
+#include <arpa/inet.h>  
+#include <mutex>        
+#include <thread>       
+#include <vector>       
+#include <map>          
 #include<unordered_map>
-#include <set>          // For maintaining active users
+#include <set>          
 
 #define PORT 12345            // Port number the server will listen on
 #define BUFFER_SIZE 1024     // Buffer size for communication
@@ -25,7 +25,7 @@ std::map<std::string, std::string> credentials = {
 };
 
 // Map to store connected usernames and their respective threads
-std::unordered_map<std::string, std::thread::id> active_users;
+std::unordered_map<std::string, int> active_users;
 
 // Function to handle communication with a single client
 void handle_client(int client_socket) {
@@ -53,11 +53,12 @@ void handle_client(int client_socket) {
                     std::lock_guard<std::mutex> lock(user_mutex);
                     if (active_users.find(username) != active_users.end()) {
                         const char *already_connected = "User already connected. Disconnecting...\n";
+                        active_users.erase(username);
                         send(client_socket, already_connected, strlen(already_connected), 0);
                         close(client_socket);
                         return;
                     }
-                    active_users[username] = std::this_thread::get_id();
+                    active_users[username] = client_socket;
                 }
 
                 const char *success_message = "Authentication successful. Welcome!\n";
@@ -72,7 +73,24 @@ void handle_client(int client_socket) {
                 const char *interaction_message = "You are now connected to the server.\n";
                 send(client_socket, interaction_message, strlen(interaction_message), 0);
                 while(true){
-                    //do bakchodi
+                    int message = read(client_socket, buffer, BUFFER_SIZE);
+                    if(message>0){
+                        buffer[message] = '\0';
+                        std::string input(buffer);
+                        space_pos = input.find(' ');
+                        std::string function = input.substr(0, space_pos);
+                        std::string information = input.substr(space_pos + 1);
+                        std::string final_message = "[" + username + "]: " + information;
+                        std::lock_guard<std::mutex> lock(cout_mutex);
+                        std::cout<<final_message<<"\n";
+                        if(function == "/broadcast"){
+                            for(auto &user : active_users){
+                                if(user.first != username){
+                                    send(user.second, final_message.c_str(), final_message.size(), 0);
+                                }
+                            }
+                        }
+                    }
                 }
 
                 // Remove user from active_users upon disconnection
