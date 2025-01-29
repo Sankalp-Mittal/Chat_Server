@@ -21,6 +21,7 @@ std::mutex user_mutex;       // Mutex to synchronize access to active users
 std::map<std::string, std::string> credentials = {
     {"user1", "password1"},
     {"user2", "password2"},
+    {"user3", "password3"},
     {"admin", "admin123"}
 };
 
@@ -32,10 +33,10 @@ void handle_client(int client_socket) {
     char buffer[BUFFER_SIZE] = {0};  // Buffer to store data received from the client
 
     // Prompt the client for username and password
-    const char *auth_request = "Enter username and password in the format: username password\n";
+    const char *auth_request = "Enter username: ";
     send(client_socket, auth_request, strlen(auth_request), 0);
 
-    // Read username and password from the client
+    // Read username from the client
     int valread = read(client_socket, buffer, BUFFER_SIZE);
     if (valread > 0) {
         buffer[valread] = '\0';  // Null-terminate the received string
@@ -43,47 +44,71 @@ void handle_client(int client_socket) {
 
         // Parse username and password
         size_t space_pos = input.find(' ');
-        if (space_pos != std::string::npos) {
-            std::string username = input.substr(0, space_pos);
-            std::string password = input.substr(space_pos + 1);
+        std::string username = input;
+        
+        memset(buffer, 0, BUFFER_SIZE);
+        const char *auth_request2 = "Enter password: ";
+        send(client_socket, auth_request2, strlen(auth_request2), 0);
+        std::string password;
+        valread = read(client_socket, buffer, BUFFER_SIZE);
+        if (valread > 0) {
+            buffer[valread] = '\0';  // Null-terminate the received string
+            password = buffer;
+        }
+        else{
+            const char *failure_message = "Authentication failed. Disconnecting...\n";
+            send(client_socket, failure_message, strlen(failure_message), 0);
+            close(client_socket);
+            return;
+        }
 
-            // Authenticate the user
-            if (credentials.find(username) != credentials.end() && credentials[username] == password) {
-                {
-                    std::lock_guard<std::mutex> lock(user_mutex);
-                    if (active_users.find(username) != active_users.end()) {
-                        const char *already_connected = "User already connected. Disconnecting...\n";
-                        // active_users.erase(username);
-                        send(client_socket, already_connected, strlen(already_connected), 0);
-                        close(client_socket);
-                        return;
-                    }
-                    // active_users[username] = client_socket;
+        // Authenticate the user
+        if (credentials.find(username) != credentials.end() && credentials[username] == password) {
+            {
+                std::lock_guard<std::mutex> lock(user_mutex);
+                if (active_users.find(username) != active_users.end()) {
+                    const char *already_connected = "User already connected. Disconnecting...\n";
+                    // active_users.erase(username);
+                    send(client_socket, already_connected, strlen(already_connected), 0);
+                    close(client_socket);
+                    return;
                 }
+                // std::lock_guard<std::mutex> lock(user_mutex);
+                active_users[username] = client_socket;
+            }
 
-                const char *success_message = "Authentication successful. Welcome!\n";
-                send(client_socket, success_message, strlen(success_message), 0);
+            const char *success_message = "Authentication successful. Welcome!\n";
+            send(client_socket, success_message, strlen(success_message), 0);
 
-                {
-                    std::lock_guard<std::mutex> lock(cout_mutex);
-                    std::cout << "User " << username << " authenticated successfully." << std::endl;
-                }
+            {
+                std::lock_guard<std::mutex> lock(cout_mutex);
+                std::cout << "User " << username << " authenticated successfully." << std::endl;
+            }
 
-                // Simulate client interaction (extend as needed)
-                const char *interaction_message = "You are now connected to the server.\n";
-                send(client_socket, interaction_message, strlen(interaction_message), 0);
-                while(true){
-                    int message = read(client_socket, buffer, BUFFER_SIZE);
-                    if(message>0){
-                        buffer[message] = '\0';
-                        std::string input(buffer);
-                        space_pos = input.find(' ');
-                        std::string function = input.substr(0, space_pos);
-                        std::string information = input.substr(space_pos + 1);
-                        std::string final_message = "[" + username + "]: " + information;
+            // Simulate client interaction (extend as needed)
+            const char *interaction_message = "You are now connected to the server.\n";
+            send(client_socket, interaction_message, strlen(interaction_message), 0);
+            usleep(1000);
+
+            while(true){
+                memset(buffer, 0, BUFFER_SIZE);
+                int message = read(client_socket, buffer, BUFFER_SIZE);
+                if(message>0){
+                    buffer[message] = '\0';
+                    std::string input(buffer);
+                    space_pos = input.find(' ');
+                    std::string function = input.substr(0, space_pos);
+                    std::string information = input.substr(space_pos + 1);
+                    std::string final_message = "[" + username + "]: " + information;
+                
+                    {
                         std::lock_guard<std::mutex> lock(cout_mutex);
                         std::cout<<final_message<<"\n";
-                        if(function == "/broadcast"){
+                    }
+
+                    if(function == "/broadcast"){
+                        {
+                            std::lock_guard<std::mutex> lock(user_mutex);
                             for(auto &user : active_users){
                                 if(user.first != username){
                                     send(user.second, final_message.c_str(), final_message.size(), 0);
@@ -91,30 +116,38 @@ void handle_client(int client_socket) {
                             }
                         }
                     }
+                    else if(function == "/msg"){
+                        int second_space = information.find(' ');
+                        std::string receiver = information.substr(0, second_space);
+                        std::string message = information.substr(second_space + 1);
+                        final_message = "[" + username + "]: " + message;
+                        {
+                            std::lock_guard<std::mutex> lock(user_mutex);
+                            if(active_users.find(receiver) != active_users.end()){
+                                send(active_users[receiver], final_message.c_str(), final_message.size(), 0);
+                            }
+                        }
+                    }
                 }
-
-                // Remove user from active_users upon disconnection
-                {
-                    std::lock_guard<std::mutex> lock(user_mutex);
-                    active_users.erase(username);
-                }
-
-                {
-                    std::lock_guard<std::mutex> lock(cout_mutex);
-                    std::cout << "User " << username << " disconnected." << std::endl;
-                }
-            } else {
-                const char *failure_message = "Authentication failed. Disconnecting...\n";
-                send(client_socket, failure_message, strlen(failure_message), 0);
-                close(client_socket);
-                return;
             }
-        } else {
-            const char *error_message = "Invalid format. Disconnecting...\n";
-            send(client_socket, error_message, strlen(error_message), 0);
-            close(client_socket);
-            return;
-        }
+
+            // Remove user from active_users upon disconnection
+            {
+                std::lock_guard<std::mutex> lock(user_mutex);
+                active_users.erase(username);
+            }
+
+            {
+                std::lock_guard<std::mutex> lock(cout_mutex);
+                std::cout << "User " << username << " disconnected." << std::endl;
+            }
+        } 
+    }
+    else {
+        const char *failure_message = "Authentication failed. Disconnecting...\n";
+        send(client_socket, failure_message, strlen(failure_message), 0);
+        close(client_socket);
+        return;
     }
 
     // Close the client socket after communication
