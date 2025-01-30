@@ -167,11 +167,11 @@ int main() {
     }
 
     // Set socket options to reuse address and port
-    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))) {
-        perror("Setsockopt failed");
-        close(server_fd);
-        exit(EXIT_FAILURE);
-    }
+    // if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))) {
+    //     perror("Setsockopt failed");
+    //     close(server_fd);
+    //     exit(EXIT_FAILURE);
+    // }
 
     // Configure server address structure
     address.sin_family = AF_INET;        // Address family: IPv4
