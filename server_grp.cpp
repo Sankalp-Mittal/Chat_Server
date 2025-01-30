@@ -27,6 +27,8 @@ std::map<std::string, std::string> credentials = {
 
 // Map to store connected usernames and their respective threads
 std::unordered_map<std::string, int> active_users;
+std::unordered_map<std::string, std::set<std::string>> groups;
+
 
 // Function to handle communication with a single client
 void handle_client(int client_socket) {
@@ -97,35 +99,130 @@ void handle_client(int client_socket) {
                     buffer[message] = '\0';
                     std::string input(buffer);
                     space_pos = input.find(' ');
-                    std::string function = input.substr(0, space_pos);
-                    std::string information = input.substr(space_pos + 1);
-                    std::string final_message = "[" + username + "]: " + information;
-                
-                    {
-                        std::lock_guard<std::mutex> lock(cout_mutex);
-                        std::cout<<final_message<<"\n";
-                    }
+                    if(space_pos!=std::string::npos){
+                        std::string function = input.substr(0, space_pos);
+                        std::string information = input.substr(space_pos + 1);
+                        std::string final_message = "[" + username + "]: " + information;
+                    
+                        // {
+                        //     std::lock_guard<std::mutex> lock(cout_mutex);
+                        //     std::cout<<final_message<<"\n";
+                        // }
 
-                    if(function == "/broadcast"){
-                        {
-                            std::lock_guard<std::mutex> lock(user_mutex);
-                            for(auto &user : active_users){
-                                if(user.first != username){
-                                    send(user.second, final_message.c_str(), final_message.size(), 0);
+                        if(function == "/broadcast"){
+                            {
+                                std::lock_guard<std::mutex> lock(user_mutex);
+                                for(auto &user : active_users){
+                                    if(user.first != username){
+                                        send(user.second, final_message.c_str(), final_message.size(), 0);
+                                    }
                                 }
                             }
                         }
-                    }
-                    else if(function == "/msg"){
-                        int second_space = information.find(' ');
-                        std::string receiver = information.substr(0, second_space);
-                        std::string message = information.substr(second_space + 1);
-                        final_message = "[" + username + "]: " + message;
-                        {
-                            std::lock_guard<std::mutex> lock(user_mutex);
-                            if(active_users.find(receiver) != active_users.end()){
-                                send(active_users[receiver], final_message.c_str(), final_message.size(), 0);
+                        else if(function == "/msg"){
+                            int second_space = information.find(' ');
+                            std::string receiver = information.substr(0, second_space);
+                            std::string message = information.substr(second_space + 1);
+                            final_message = "[" + username + "]: " + message;
+                            {
+                                std::lock_guard<std::mutex> lock(user_mutex);
+                                if(active_users.find(receiver) != active_users.end()){
+                                    send(active_users[receiver], final_message.c_str(), final_message.size(), 0);
+                                }
                             }
+                        }
+                        else if(function == "/create_group"){
+                            std::string group_name = information;
+                            {
+                                std::lock_guard<std::mutex> lock(user_mutex);
+                                if(groups.find(group_name) == groups.end()){
+                                    groups[group_name] = std::set<std::string>();
+                                    groups[group_name].insert(username);
+                                    std::string message = "Group created.";
+                                    send(client_socket, message.c_str(), message.size(), 0);
+                                }
+                                else{
+                                    std::string message = "Group already exists.";
+                                    send(client_socket, message.c_str(), message.size(), 0);
+                                }
+                            }
+                        }
+                        else if(function == "/join_group"){
+                            std::string group_name = information;
+                            {
+                                std::lock_guard<std::mutex> lock(user_mutex);
+                                if(groups.find(group_name) != groups.end()){
+                                    groups[group_name].insert(username);
+                                    std::string message = "You have joined the group.";
+                                    send(client_socket, message.c_str(), message.size(), 0);
+                                }
+                                else{
+                                    std::string message = "Group does not exist.";
+                                    send(client_socket, message.c_str(), message.size(), 0);
+                                }
+                            }
+                        }
+                        else if(function == "/leave_group"){
+                            std::string group_name = information;
+                            {
+                                std::lock_guard<std::mutex> lock(user_mutex);
+                                if(groups.find(group_name) != groups.end()){
+                                    if(groups[group_name].find(username) != groups[group_name].end()){
+                                        groups[group_name].erase(username);
+                                        std::string message = "You have left the group.";
+                                        send(client_socket, message.c_str(), message.size(), 0);
+                                    }
+                                    else{
+                                        std::string message = "You are not part of this group.";
+                                        send(client_socket, message.c_str(), message.size(), 0);
+                                    }
+                                }
+                                else{
+                                    std::string message = "Group does not exist.";
+                                    send(client_socket, message.c_str(), message.size(), 0);
+                                }
+                            }
+                        }
+                        else if(function == "/msg_group"){
+                            int second_space = information.find(' ');
+                            std::string group_name = information.substr(0, second_space);
+                            std::string message = information.substr(second_space + 1);
+                            final_message = "["+ group_name+ "]:" + "[" + username + "]: " + message;
+                            {
+                                std::lock_guard<std::mutex> lock(user_mutex);
+                                if(groups.find(group_name) != groups.end()){
+                                    for(auto &user : groups[group_name]){
+                                        send(active_users[user], final_message.c_str(), final_message.size(), 0);
+                                    }
+                                }
+                            }
+                        }
+                        
+                    }
+                    else{
+                        std::string function = input;
+                        if(function == "/quit"){
+                            break;
+                        }
+                        else if(function == "/list_groups"){
+                            std::string group_list = "Groups: ";
+                            {
+                                std::lock_guard<std::mutex> lock(user_mutex);
+                                for(auto &group : groups){
+                                    group_list += group.first + " ";
+                                }
+                            }
+                            send(client_socket, group_list.c_str(), group_list.size(), 0);
+                        }
+                        else if(function == "/list_users"){
+                            std::string user_list = "Users: ";
+                            {
+                                std::lock_guard<std::mutex> lock(user_mutex);
+                                for(auto &user : active_users){
+                                    user_list += user.first + " ";
+                                }
+                            }
+                            send(client_socket, user_list.c_str(), user_list.size(), 0);
                         }
                     }
                 }
