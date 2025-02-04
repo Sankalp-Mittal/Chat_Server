@@ -5,7 +5,8 @@
 #include <netinet/in.h> 
 #include <arpa/inet.h>  
 #include <mutex>        
-#include <thread>       
+#include <thread>  
+// #include<atomic>     
 #include <vector>       
 #include <map>          
 #include <unordered_map>
@@ -21,10 +22,79 @@ using namespace std;
 
 mutex cout_mutex;
 mutex user_mutex;
+mutex group_mutex;
 
 unordered_map <int, string> clients; // Client socket -> username
+unordered_map <string,int> user_socket; // Username -> client socket
 unordered_map <string, string> users; // Username -> password
 unordered_map <string, unordered_set <int> > groups; // Group -> client sockets
+
+// atomic<bool> server_running(true);
+
+// void monitor_input() {
+//     string command;
+//     while (server_running) {
+//         cin >> command;
+//         if (command == "/exit") {
+//             server_running = false;
+//             break;
+//         }
+//     }
+// }
+
+void broadcast_message(const string &message, int sender_socket) {
+    for (auto &client : clients) {
+        if (client.first != sender_socket) {
+            send(client.first, message.c_str(), message.size(), 0);
+        }
+    }
+}
+
+void message_person(const string &message, int sender_socket, string receiver) {
+    // for (auto &client : clients) {
+    //     if (client.second == receiver) {
+    //         send(client.first, message.c_str(), message.size(), 0);
+    //     }
+    // }
+    if(user_socket.find(receiver) != user_socket.end()){
+        send(user_socket[receiver], message.c_str(), message.size(), 0);
+    }
+    else{
+        const char *user_not_found = "User not found.\n";
+        send(sender_socket, user_not_found, strlen(user_not_found), 0);
+    }
+}
+
+void create_group(const string &group_name, int client_socket) {
+    if (groups.find(group_name) == groups.end()) {
+        groups[group_name].insert(client_socket);
+        string group_created = "Group " + group_name + " has been created by " + clients[client_socket] + ".\n";
+        broadcast_message(group_created, client_socket);
+    }
+    else {
+        const char *group_exists = "Group already exists.\n";
+        send(client_socket, group_exists, strlen(group_exists), 0);
+    }
+}
+
+void group_message(const string &message, int sender_socket, string group) {
+    if (groups.find(group) != groups.end()) {
+        if (groups[group].find(sender_socket) == groups[group].end()) {
+            const char *not_in_group = "You are not part of this group.\n";
+            send(sender_socket, not_in_group, strlen(not_in_group), 0);
+            return;
+        }
+        for (auto &client : groups[group]) {
+            if (client != sender_socket) {
+                send(client, message.c_str(), message.size(), 0);
+            }
+        }
+    }
+    else {
+        const char *group_not_found = "Group not found.\n";
+        send(sender_socket, group_not_found, strlen(group_not_found), 0);
+    }
+}
 
 void handle_client(int client_socket) {
     char buffer[BUFFER_SIZE] = {0}; // buffer to store messages
@@ -68,6 +138,7 @@ void handle_client(int client_socket) {
                     }
                 }
                 clients[client_socket] = username;
+                user_socket[username] = client_socket;
             }
 
             const char *success_message = "Authentication successful. Welcome!\n";
@@ -91,66 +162,69 @@ void handle_client(int client_socket) {
                     space_pos = input.find(' ');
                     string function = input.substr(0, space_pos);
                     string information = input.substr(space_pos + 1);
-                    string final_message = "[" + username + "]: " + information;
                 
                     {
                         lock_guard<mutex> lock(cout_mutex);
-                        cout<<final_message<<"\n";
+                        string message = "[" + username+ "]" + ": " + input + "\n";
+                        cout<<message<<"\n";
                     }
 
                     if(function == "/broadcast"){
+                        string final_message = "[" + username + "]: " + information;
                         {
                             lock_guard<mutex> lock(user_mutex);
-                            for(auto &user : clients){
-                                if(user.second != username){
-                                    send(user.first, final_message.c_str(), final_message.size(), 0);
-                                }
-                            }
+                            broadcast_message(final_message, client_socket);
                         }
                     }
                     else if(function == "/msg"){
                         int second_space = information.find(' ');
                         string receiver = information.substr(0, second_space);
                         string message = information.substr(second_space + 1);
-                        final_message = "[" + username + "]: " + message;
+                        string final_message = "[" + username + "]: " + message;
                         {
                             lock_guard<mutex> lock(user_mutex);
-                            for (auto &user : clients) {
-                                if (user.second == receiver) {
-                                    send(user.first, final_message.c_str(), final_message.size(), 0);
-                                }
-                            }
+                            message_person(final_message, client_socket, receiver);
                         }
                     }
                     else if (function == "/create_group") {
                         {
-                            lock_guard<mutex> lock(user_mutex);
-                            if (groups.find(information) == groups.end()) {
-                                groups[information].insert(client_socket);
-                            }
-                            else {
-                                const char *group_exists = "Group already exists.\n";
-                                send(client_socket, group_exists, strlen(group_exists), 0);
-                            }
+                            lock_guard<mutex> lock(group_mutex);
+                            create_group(information, client_socket);
                         }
                     }
                     else if (function == "/join_group") {
                         {
-                            lock_guard<mutex> lock(user_mutex);
+                            lock_guard<mutex> lock(group_mutex);
                             if (groups.find(information) != groups.end()) {
                                 groups[information].insert(client_socket);
+                                string joined_group = username + " has joined the group " + information + ".\n";
+                                group_message(joined_group, client_socket, information);
+                                string alert = "You have joined the group " + information + ".\n";
+                                send(client_socket, alert.c_str(), alert.size(), 0);
                             }
                             else {
-                                const char *group_not_found = "Group not found.\n";
-                                send(client_socket, group_not_found, strlen(group_not_found), 0);
+                                string group_not_found = "Group not found.\n";
+                                send(client_socket, group_not_found.c_str(), group_not_found.size(), 0);
                             }
                         }
                     }
                     else if (function == "/leave_group") {
                         {
-                            lock_guard<mutex> lock(user_mutex);
+                            lock_guard<mutex> lock(group_mutex);
                             if (groups.find(information) != groups.end()) {
-                                groups[information].erase(client_socket);
+                                if(groups[information].find(client_socket) == groups[information].end()){
+                                    string not_in_group = "You are not part of this group.\n";
+                                    send(client_socket, not_in_group.c_str(), not_in_group.size(), 0);
+                                    continue;
+                                }
+                                else{
+                                    string left_group = username + " has left the group " + information + ".\n";
+                                    group_message(left_group, client_socket, information);
+                                    string alert = "You have left the group " + information + ".\n";
+                                    send(client_socket, alert.c_str(), alert.size(), 0);
+                                    groups[information].erase(client_socket);
+                                }
+
                             }
                             else {
                                 const char *group_not_found = "Group not found.\n";
@@ -162,25 +236,10 @@ void handle_client(int client_socket) {
                         int second_space = information.find(' ');
                         string group = information.substr(0, second_space);
                         string message = information.substr(second_space + 1);
-                        final_message = "[" + group + " - " + username + "]: " + message;
+                        string final_message = "[" + group + " - " + username + "]: " + message;
                         {
-                            lock_guard<mutex> lock(user_mutex);
-                            if (groups.find(group) != groups.end()) {
-                                if (groups[group].find(client_socket) == groups[group].end()) {
-                                    const char *not_in_group = "You are not part of this group.\n";
-                                    send(client_socket, not_in_group, strlen(not_in_group), 0);
-                                    continue;
-                                }
-                                for (auto &client : groups[group]) {
-                                    if (client != client_socket) {
-                                        send(client, final_message.c_str(), final_message.size(), 0);
-                                    }
-                                }
-                            }
-                            else {
-                                const char *group_not_found = "Group not found.\n";
-                                send(client_socket, group_not_found, strlen(group_not_found), 0);
-                            }
+                            lock_guard<mutex> lock(group_mutex);
+                            group_message(final_message, client_socket, group);
                         }
                     }
                     else {
@@ -194,6 +253,7 @@ void handle_client(int client_socket) {
             {
                 lock_guard<mutex> lock(user_mutex);
                 clients.erase(client_socket);
+                user_socket.erase(username);
             }
 
             {
@@ -251,7 +311,7 @@ int main() {
     }
 
     //Set socket options to reuse address and port
-    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt))) {
+    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))) {
         perror("Setsockopt failed");
         close(server_fd);
         exit(EXIT_FAILURE);
