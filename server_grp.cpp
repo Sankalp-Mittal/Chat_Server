@@ -4,9 +4,10 @@
 #include <sys/socket.h> 
 #include <netinet/in.h> 
 #include <arpa/inet.h>  
+#include <fcntl.h>
 #include <mutex>        
 #include <thread>  
-// #include<atomic>     
+#include<atomic>     
 #include <vector>       
 #include <map>          
 #include <unordered_map>
@@ -29,18 +30,26 @@ unordered_map <string,int> user_socket; // Username -> client socket
 unordered_map <string, string> users; // Username -> password
 unordered_map <string, unordered_set <int> > groups; // Group -> client sockets
 
-// atomic<bool> server_running(true);
+atomic<bool> shutdown_server(false);
 
-// void monitor_input() {
-//     string command;
-//     while (server_running) {
-//         cin >> command;
-//         if (command == "/exit") {
-//             server_running = false;
-//             break;
-//         }
-//     }
-// }
+void listen_for_exit_command() {
+    string input;
+    while (true) {
+        cin >> input;
+        if (input == "/exit") {
+            if(clients.size()!=0){
+                {
+                    lock_guard<mutex> lock(cout_mutex);
+                    cout<<"There are still clients connected. Please disconnect all clients before shutting down the server.\n";
+                    continue;
+                }
+            }
+            
+            shutdown_server = true; // Set the shutdown flag
+            break;
+        }
+    }
+}
 
 void broadcast_message(const string &message, int sender_socket) {
     for (auto &client : clients) {
@@ -51,11 +60,6 @@ void broadcast_message(const string &message, int sender_socket) {
 }
 
 void message_person(const string &message, int sender_socket, string receiver) {
-    // for (auto &client : clients) {
-    //     if (client.second == receiver) {
-    //         send(client.first, message.c_str(), message.size(), 0);
-    //     }
-    // }
     if(user_socket.find(receiver) != user_socket.end()){
         send(user_socket[receiver], message.c_str(), message.size(), 0);
     }
@@ -242,6 +246,11 @@ void handle_client(int client_socket) {
                             group_message(final_message, client_socket, group);
                         }
                     }
+                    else if(function == "/exit"){
+                        const char *exit_message = "Exiting...\n";
+                        send(client_socket, exit_message, strlen(exit_message), 0);
+                        break;
+                    }
                     else {
                         const char *invalid_command = "Invalid command.\n";
                         send(client_socket, invalid_command, strlen(invalid_command), 0);
@@ -341,12 +350,26 @@ int main() {
         cout << "Server is listening on port " << PORT << "..." << endl;
     }
 
+    fcntl(server_fd, F_SETFL, O_NONBLOCK);
+
+    thread exit_thread(listen_for_exit_command);
+    exit_thread.detach();
+
     vector<thread> threads;
 
-    while (true) {
+    while (!shutdown_server) {
         int new_socket;  // Socket for the new client connection
-
+        
         if ((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen)) < 0) {
+            if (errno == EWOULDBLOCK || errno == EAGAIN) {
+                // No pending connections, sleep for a short time and retry
+                this_thread::sleep_for(chrono::milliseconds(100));
+                continue;
+            } 
+            else if (shutdown_server) {
+                // Accept failed because the server is shutting down
+                break;
+            }
             perror("Accept failed");
             close(server_fd);
             exit(EXIT_FAILURE);
@@ -361,14 +384,35 @@ int main() {
         threads.emplace_back(::thread(handle_client, new_socket));
     }
 
-    // Join all threads before exiting for cleanup
-    for (auto &t : threads) {
+    // Server is shutting down
+    cout << "Server is shutting down..." << endl;
+
+    // Close all client sockets
+    for (auto client_socket : clients) {
+        close(client_socket.first);
+    }
+
+    cout<<"Closing server socket..."<<endl;
+
+    // Close the server socket
+    close(server_fd);
+
+    cout<<"Server socket closed."<<endl;
+
+    // Join all client threads
+    for (thread &t : threads) {
         if (t.joinable()) {
             t.join();
         }
     }
 
-    close(server_fd);
+    cout<<"All client threads joined."<<endl;
 
+    // Join the exit thread
+    if (exit_thread.joinable()) {
+        exit_thread.join();
+    }
+
+    cout << "Server has shut down cleanly." << endl;
     return 0;
 }
