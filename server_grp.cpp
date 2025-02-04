@@ -64,28 +64,34 @@ void message_person(const string &message, int sender_socket, string receiver) {
         send(user_socket[receiver], message.c_str(), message.size(), 0);
     }
     else{
-        const char *user_not_found = "User not found.\n";
-        send(sender_socket, user_not_found, strlen(user_not_found), 0);
+        string user_not_found = "User not found.\n";
+        send(sender_socket, user_not_found.c_str(), user_not_found.size(), 0);
     }
 }
 
 void create_group(const string &group_name, int client_socket) {
+    size_t space_pos = group_name.find(' ');
+    if (space_pos != string::npos) {
+        string invalid_group_name = "Group name cannot contain spaces.\n";
+        send(client_socket, invalid_group_name.c_str(), invalid_group_name.size(), 0);
+        return;
+    }
     if (groups.find(group_name) == groups.end()) {
         groups[group_name].insert(client_socket);
         string group_created = "Group " + group_name + " has been created by " + clients[client_socket] + ".\n";
         broadcast_message(group_created, client_socket);
     }
     else {
-        const char *group_exists = "Group already exists.\n";
-        send(client_socket, group_exists, strlen(group_exists), 0);
+        string group_exists = "Group already exists.\n";
+        send(client_socket, group_exists.c_str(), group_exists.size(), 0);
     }
 }
 
 void group_message(const string &message, int sender_socket, string group) {
     if (groups.find(group) != groups.end()) {
         if (groups[group].find(sender_socket) == groups[group].end()) {
-            const char *not_in_group = "You are not part of this group.\n";
-            send(sender_socket, not_in_group, strlen(not_in_group), 0);
+            string not_in_group = "You are not part of this group.\n";
+            send(sender_socket, not_in_group.c_str(), not_in_group.size(), 0);
             return;
         }
         for (auto &client : groups[group]) {
@@ -95,16 +101,16 @@ void group_message(const string &message, int sender_socket, string group) {
         }
     }
     else {
-        const char *group_not_found = "Group not found.\n";
-        send(sender_socket, group_not_found, strlen(group_not_found), 0);
+        string group_not_found = "Group not found.\n";
+        send(sender_socket, group_not_found.c_str(), group_not_found.size(), 0);
     }
 }
 
 void handle_client(int client_socket) {
     char buffer[BUFFER_SIZE] = {0}; // buffer to store messages
 
-    const char *auth_request = "Enter username: ";
-    send(client_socket, auth_request, strlen(auth_request), 0);
+    string auth_request = "Enter username: ";
+    send(client_socket, auth_request.c_str(), auth_request.size(), 0);
 
     int valread = read(client_socket, buffer, BUFFER_SIZE);
     if (valread > 0) {
@@ -115,8 +121,8 @@ void handle_client(int client_socket) {
         string username = input;
         
         memset(buffer, 0, BUFFER_SIZE);
-        const char *auth_request2 = "Enter password: ";
-        send(client_socket, auth_request2, strlen(auth_request2), 0);
+        string auth_request2 = "Enter password: ";
+        send(client_socket, auth_request2.c_str(), auth_request2.size(), 0);
         string password;
         valread = read(client_socket, buffer, BUFFER_SIZE);
         if (valread > 0) {
@@ -124,8 +130,8 @@ void handle_client(int client_socket) {
             password = buffer;
         }
         else{
-            const char *failure_message = "Authentication failed. Disconnecting...\n";
-            send(client_socket, failure_message, strlen(failure_message), 0);
+            string failure_message = "Authentication failed. Disconnecting...\n";
+            send(client_socket, failure_message.c_str(), failure_message.size(), 0);
             close(client_socket);
             return;
         }
@@ -135,8 +141,8 @@ void handle_client(int client_socket) {
                 lock_guard<mutex> lock(user_mutex);
                 for (auto &user : clients) {
                     if (user.second == username) {
-                        const char *already_connected = "User already connected. Disconnecting...\n";
-                        send(client_socket, already_connected, strlen(already_connected), 0);
+                        string already_connected = "User already connected. Disconnecting...\n";
+                        send(client_socket, already_connected.c_str(), already_connected.size(), 0);
                         close(client_socket);
                         return;
                     }
@@ -145,16 +151,16 @@ void handle_client(int client_socket) {
                 user_socket[username] = client_socket;
             }
 
-            const char *success_message = "Authentication successful. Welcome!\n";
-            send(client_socket, success_message, strlen(success_message), 0);
+            string success_message = "Authentication successful. Welcome!\n";
+            send(client_socket, success_message.c_str(), success_message.size(), 0);
 
             {
                 lock_guard<mutex> lock(cout_mutex);
                 cout << "User " << username << " authenticated successfully." << endl;
             }
 
-            const char *interaction_message = "You are now connected to the server.\n";
-            send(client_socket, interaction_message, strlen(interaction_message), 0);
+            string interaction_message = "You are now connected to the server.\n";
+            send(client_socket, interaction_message.c_str(), interaction_message.size(), 0);
             usleep(1000);
 
             while(true){
@@ -231,8 +237,8 @@ void handle_client(int client_socket) {
 
                             }
                             else {
-                                const char *group_not_found = "Group not found.\n";
-                                send(client_socket, group_not_found, strlen(group_not_found), 0);
+                                string group_not_found = "Group not found.\n";
+                                send(client_socket, group_not_found.c_str(), group_not_found.size(), 0);
                             }
                         }
                     }
@@ -247,13 +253,13 @@ void handle_client(int client_socket) {
                         }
                     }
                     else if(function == "/exit"){
-                        const char *exit_message = "Exiting...\n";
-                        send(client_socket, exit_message, strlen(exit_message), 0);
+                        string exit_message = "Exiting...\n";
+                        send(client_socket, exit_message.c_str(), exit_message.size(), 0);
                         break;
                     }
                     else {
-                        const char *invalid_command = "Invalid command.\n";
-                        send(client_socket, invalid_command, strlen(invalid_command), 0);
+                        string invalid_command = "Invalid command.\n";
+                        send(client_socket, invalid_command.c_str(), invalid_command.size(), 0);
                     }
                 }
             }
@@ -271,15 +277,15 @@ void handle_client(int client_socket) {
             }
         }
         else {
-            const char *failure_message = "Authentication failed. Disconnecting...\n";
-            send(client_socket, failure_message, strlen(failure_message), 0);
+            string failure_message = "Authentication failed. Disconnecting...\n";
+            send(client_socket, failure_message.c_str(), failure_message.size(), 0);
             close(client_socket);
             return;
         }
     }
     else {
-        const char *failure_message = "Authentication failed. Disconnecting...\n";
-        send(client_socket, failure_message, strlen(failure_message), 0);
+        string failure_message = "Authentication failed. Disconnecting...\n";
+        send(client_socket, failure_message.c_str(), failure_message.size(), 0);
         close(client_socket);
         return;
     }
