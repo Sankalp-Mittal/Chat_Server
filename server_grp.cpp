@@ -180,7 +180,7 @@ void handle_client(int client_socket) {
                     }
 
                     if(function == "/broadcast"){
-                        string final_message = "[" + username + "]: " + information;
+                        string final_message = "[Broadcast message by " + username + "]: " + information;
                         {
                             lock_guard<mutex> lock(user_mutex);
                             broadcast_message(final_message, client_socket);
