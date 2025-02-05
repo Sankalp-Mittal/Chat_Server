@@ -1,4 +1,10 @@
-# Assignment README
+# Chat Server
+
+## About
+
+This is the submission for CS425 2025 Spring Semester Assignment 1, made by 
+- Animesh Madaan (220145)
+- Sankalp Mittal (220963)
 
 ## Features
 
@@ -23,7 +29,7 @@ For "user" it appears as
 [<sender>]: <your message>
 ```
 4. **Group Management**:
-   - A user can create a group that doesn't already exist.
+   - A user can create a group that doesn't already exist, but this __group name__ cannot have spaces.
    ```
    /create_group <group name>
    ```
