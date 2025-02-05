@@ -326,7 +326,7 @@ int main() {
     }
 
     //Set socket options to reuse address and port
-    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))) {
+    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt))) {
         perror("Setsockopt failed");
         close(server_fd);
         exit(EXIT_FAILURE);
@@ -356,7 +356,8 @@ int main() {
         cout << "Server is listening on port " << PORT << "..." << endl;
     }
 
-    fcntl(server_fd, F_SETFL, O_NONBLOCK); // Make the server socket non-blocking
+    // TODO
+    //fcntl(server_fd, F_SETFL, O_NONBLOCK); // Make the server socket non-blocking
 
     thread exit_thread(listen_for_exit_command);
     exit_thread.detach(); //listen for the exit command in the background
