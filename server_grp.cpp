@@ -7,7 +7,7 @@
 #include <fcntl.h>
 #include <mutex>        
 #include <thread>  
-#include<atomic>     
+#include <atomic>     
 #include <vector>       
 #include <map>          
 #include <unordered_map>
@@ -52,6 +52,7 @@ void listen_for_exit_command() {
     }
 }
 
+// sends message to all clients except the sender
 void broadcast_message(const string &message, int sender_socket) {
     for (auto &client : clients) {
         if (client.first != sender_socket) {
@@ -63,6 +64,7 @@ void broadcast_message(const string &message, int sender_socket) {
     }
 }
 
+// sends message to a specific client
 void message_person(const string &message, int sender_socket, string receiver) {
     if(user_socket.find(receiver) != user_socket.end()){
         {
@@ -79,6 +81,7 @@ void message_person(const string &message, int sender_socket, string receiver) {
     }
 }
 
+// creates a group
 void create_group(const string &group_name, int client_socket) {
     size_t space_pos = group_name.find(' ');
     if (space_pos != string::npos) {
@@ -98,6 +101,7 @@ void create_group(const string &group_name, int client_socket) {
         }
     }
     else {
+        // Group already exists
         string group_exists = "Error: Group already exists.\n";
         {
             lock_guard<mutex> lock(send_mutex);
@@ -106,6 +110,7 @@ void create_group(const string &group_name, int client_socket) {
     }
 }
 
+// sends message to all clients in a group
 void group_message(const string &message, int sender_socket, string group) {
     if (groups.find(group) != groups.end()) {
         if (groups[group].find(sender_socket) == groups[group].end()) {
@@ -134,6 +139,7 @@ void group_message(const string &message, int sender_socket, string group) {
     }
 }
 
+// handles the client
 void handle_client(int client_socket) {
     char buffer[BUFFER_SIZE] = {0}; // buffer to store messages
 
@@ -143,6 +149,7 @@ void handle_client(int client_socket) {
         send(client_socket, auth_request.c_str(), auth_request.size(), 0);
     }
 
+    // Read the username
     int valread = read(client_socket, buffer, BUFFER_SIZE);
     if (valread > 0) {
         buffer[valread] = '\0';
@@ -158,12 +165,15 @@ void handle_client(int client_socket) {
             send(client_socket, auth_request2.c_str(), auth_request2.size(), 0);
         }
         string password;
+
+        // Read the password
         valread = read(client_socket, buffer, BUFFER_SIZE);
         if (valread > 0) {
             buffer[valread] = '\0';
             password = buffer;
         }
         else{
+            // Error reading password
             string failure_message = "Authentication failed. Disconnecting...\n";
             {
                 lock_guard<mutex> lock(send_mutex);
@@ -175,6 +185,7 @@ void handle_client(int client_socket) {
 
         if (users.find(username) != users.end() && users[username] == password) {
             {
+                // Check if the user is already connected
                 lock_guard<mutex> lock(user_mutex);
                 for (auto &user : clients) {
                     if (user.second == username) {
@@ -209,6 +220,7 @@ void handle_client(int client_socket) {
             }
             usleep(1000);
 
+            // Handle user interaction
             while(true){
                 memset(buffer, 0, BUFFER_SIZE);
                 int message = read(client_socket, buffer, BUFFER_SIZE);
@@ -411,7 +423,7 @@ int main() {
         istringstream lineStream(line);
         string part1, part2;
 
-        // Use getline to extract the two parts, separated by ':'
+        // Use getline to extract the two parts
         if (getline(lineStream, part1, ':') && getline(lineStream, part2)) {
             users[part1] = part2;
         } else {
@@ -461,7 +473,6 @@ int main() {
         std::cout << "Server is listening on port " << PORT << "..." << endl;
     }
 
-    // TODO
     fcntl(server_fd, F_SETFL, O_NONBLOCK); // Make the server socket non-blocking
 
     thread exit_thread(listen_for_exit_command);
