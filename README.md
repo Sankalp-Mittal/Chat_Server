@@ -6,6 +6,30 @@ This is the submission for CS425 2025 Spring Semester Assignment 1, made by
 - Animesh Madaan (220145)
 - Sankalp Mittal (220963)
 
+## Compilation and Execution
+
+### Prerequisites
+- A C++ compiler (g++)
+- make
+- Linux environment
+### Compiling the Server
+To compile the server, use the following command:
+```bash
+make
+```
+### Running the Server
+To start the server, execute:
+```bash
+ ./server_grp
+```
+The server will listen on port `12345` by default.
+### Server Shutdown
+To shut down the server, enter the command:
+```bash
+ /exit
+```
+The server will only shut down if no clients are connected.
+
 ## Features
 
 ### Implemented Features
