@@ -24,6 +24,7 @@ using namespace std;
 mutex cout_mutex;
 mutex user_mutex;
 mutex group_mutex;
+mutex send_mutex;
 
 unordered_map <int, string> clients; // Client socket -> username
 unordered_map <string,int> user_socket; // Username -> client socket
@@ -54,18 +55,27 @@ void listen_for_exit_command() {
 void broadcast_message(const string &message, int sender_socket) {
     for (auto &client : clients) {
         if (client.first != sender_socket) {
-            send(client.first, message.c_str(), message.size(), 0);
+            {
+                lock_guard<mutex> lock(send_mutex);
+                send(client.first, message.c_str(), message.size(), 0);
+            }
         }
     }
 }
 
 void message_person(const string &message, int sender_socket, string receiver) {
     if(user_socket.find(receiver) != user_socket.end()){
-        send(user_socket[receiver], message.c_str(), message.size(), 0);
+        {
+            lock_guard<mutex> lock(send_mutex);
+            send(user_socket[receiver], message.c_str(), message.size(), 0);
+        }
     }
     else{
         string user_not_found = "Error: User not found.\n";
-        send(sender_socket, user_not_found.c_str(), user_not_found.size(), 0);
+        {
+            lock_guard<mutex> lock(send_mutex);
+            send(sender_socket, user_not_found.c_str(), user_not_found.size(), 0);
+        }
     }
 }
 
@@ -73,7 +83,10 @@ void create_group(const string &group_name, int client_socket) {
     size_t space_pos = group_name.find(' ');
     if (space_pos != string::npos) {
         string invalid_group_name = "Error: Group name cannot contain spaces.\n";
-        send(client_socket, invalid_group_name.c_str(), invalid_group_name.size(), 0);
+        {
+            lock_guard<mutex> lock(send_mutex); 
+            send(client_socket, invalid_group_name.c_str(), invalid_group_name.size(), 0);
+        }
         return;
     }
     if (groups.find(group_name) == groups.end()) {
@@ -83,7 +96,10 @@ void create_group(const string &group_name, int client_socket) {
     }
     else {
         string group_exists = "Error: Group already exists.\n";
-        send(client_socket, group_exists.c_str(), group_exists.size(), 0);
+        {
+            lock_guard<mutex> lock(send_mutex);
+            send(client_socket, group_exists.c_str(), group_exists.size(), 0);
+        }
     }
 }
 
@@ -91,18 +107,27 @@ void group_message(const string &message, int sender_socket, string group) {
     if (groups.find(group) != groups.end()) {
         if (groups[group].find(sender_socket) == groups[group].end()) {
             string not_in_group = "Error: You are not part of this group.\n";
-            send(sender_socket, not_in_group.c_str(), not_in_group.size(), 0);
+            {
+                lock_guard<mutex> lock(send_mutex);
+                send(sender_socket, not_in_group.c_str(), not_in_group.size(), 0);
+            }
             return;
         }
         for (auto &client : groups[group]) {
             if (client != sender_socket) {
-                send(client, message.c_str(), message.size(), 0);
+                {
+                    lock_guard<mutex> lock(send_mutex);
+                    send(client, message.c_str(), message.size(), 0);
+                }
             }
         }
     }
     else {
         string group_not_found = "Error: Group not found.\n";
-        send(sender_socket, group_not_found.c_str(), group_not_found.size(), 0);
+        {
+            lock_guard<mutex> lock(send_mutex);
+            send(sender_socket, group_not_found.c_str(), group_not_found.size(), 0);
+        }
     }
 }
 
@@ -110,7 +135,10 @@ void handle_client(int client_socket) {
     char buffer[BUFFER_SIZE] = {0}; // buffer to store messages
 
     string auth_request = "Enter username: ";
-    send(client_socket, auth_request.c_str(), auth_request.size(), 0);
+    {
+        lock_guard<mutex> lock(send_mutex);
+        send(client_socket, auth_request.c_str(), auth_request.size(), 0);
+    }
 
     int valread = read(client_socket, buffer, BUFFER_SIZE);
     if (valread > 0) {
@@ -122,7 +150,10 @@ void handle_client(int client_socket) {
         
         memset(buffer, 0, BUFFER_SIZE);
         string auth_request2 = "Enter password: ";
-        send(client_socket, auth_request2.c_str(), auth_request2.size(), 0);
+        {
+            lock_guard<mutex> lock(send_mutex);
+            send(client_socket, auth_request2.c_str(), auth_request2.size(), 0);
+        }
         string password;
         valread = read(client_socket, buffer, BUFFER_SIZE);
         if (valread > 0) {
@@ -131,7 +162,10 @@ void handle_client(int client_socket) {
         }
         else{
             string failure_message = "Authentication failed. Disconnecting...\n";
-            send(client_socket, failure_message.c_str(), failure_message.size(), 0);
+            {
+                lock_guard<mutex> lock(send_mutex);
+                send(client_socket, failure_message.c_str(), failure_message.size(), 0);
+            }
             close(client_socket);
             return;
         }
@@ -142,7 +176,10 @@ void handle_client(int client_socket) {
                 for (auto &user : clients) {
                     if (user.second == username) {
                         string already_connected = "Error: User already connected. Disconnecting...\n";
-                        send(client_socket, already_connected.c_str(), already_connected.size(), 0);
+                        {
+                            lock_guard<mutex> lock(send_mutex);
+                            send(client_socket, already_connected.c_str(), already_connected.size(), 0);
+                        }
                         close(client_socket);
                         return;
                     }
@@ -152,7 +189,10 @@ void handle_client(int client_socket) {
             }
 
             string success_message = "Authentication successful. Welcome!\n";
-            send(client_socket, success_message.c_str(), success_message.size(), 0);
+            {
+                lock_guard<mutex> lock(send_mutex);
+                send(client_socket, success_message.c_str(), success_message.size(), 0);
+            }
 
             {
                 lock_guard<mutex> lock(cout_mutex);
@@ -160,7 +200,10 @@ void handle_client(int client_socket) {
             }
 
             string interaction_message = "You are now connected to the server.\n";
-            send(client_socket, interaction_message.c_str(), interaction_message.size(), 0);
+            {
+                lock_guard<mutex> lock(send_mutex);
+                send(client_socket, interaction_message.c_str(), interaction_message.size(), 0);
+            }
             usleep(1000);
 
             while(true){
@@ -216,11 +259,17 @@ void handle_client(int client_socket) {
                                 string joined_group = username + " has joined the group " + information + ".\n";
                                 group_message(joined_group, client_socket, information);
                                 string alert = "You have joined the group " + information + ".\n";
-                                send(client_socket, alert.c_str(), alert.size(), 0);
+                                {
+                                    lock_guard<mutex> lock(send_mutex);
+                                    send(client_socket, alert.c_str(), alert.size(), 0);
+                                }
                             }
                             else {
                                 string group_not_found = "Error: Group not found.\n";
-                                send(client_socket, group_not_found.c_str(), group_not_found.size(), 0);
+                                {
+                                    lock_guard<mutex> lock(send_mutex);
+                                    send(client_socket, group_not_found.c_str(), group_not_found.size(), 0);
+                                }
                             }
                         }
                     }
@@ -230,21 +279,30 @@ void handle_client(int client_socket) {
                             if (groups.find(information) != groups.end()) {
                                 if(groups[information].find(client_socket) == groups[information].end()){
                                     string not_in_group = "Error: You are not part of this group.\n";
-                                    send(client_socket, not_in_group.c_str(), not_in_group.size(), 0);
+                                    {
+                                        lock_guard<mutex> lock(send_mutex);
+                                        send(client_socket, not_in_group.c_str(), not_in_group.size(), 0);
+                                    }
                                     continue;
                                 }
                                 else{
                                     string left_group = username + " has left the group " + information + ".\n";
                                     group_message(left_group, client_socket, information);
                                     string alert = "You have left the group " + information + ".\n";
-                                    send(client_socket, alert.c_str(), alert.size(), 0);
+                                    {
+                                        lock_guard<mutex> lock(send_mutex);
+                                        send(client_socket, alert.c_str(), alert.size(), 0);
+                                    }
                                     groups[information].erase(client_socket);
                                 }
 
                             }
                             else {
                                 string group_not_found = "Error: Group not found.\n";
-                                send(client_socket, group_not_found.c_str(), group_not_found.size(), 0);
+                                {
+                                    lock_guard<mutex> lock(send_mutex);
+                                    send(client_socket, group_not_found.c_str(), group_not_found.size(), 0);
+                                }
                             }
                         }
                     }
@@ -260,7 +318,10 @@ void handle_client(int client_socket) {
                     }
                     else if(function == "/exit"){
                         string exit_message = "Exiting...\n";
-                        send(client_socket, exit_message.c_str(), exit_message.size(), 0);
+                        {
+                            lock_guard<mutex> lock(send_mutex);
+                            send(client_socket, exit_message.c_str(), exit_message.size(), 0);
+                        }
                         break;
                     }
                     else if(function == "/list_users"){
@@ -271,7 +332,10 @@ void handle_client(int client_socket) {
                                 user_list += user.second + "\n";
                             }
                         }
-                        send(client_socket, user_list.c_str(), user_list.size(), 0);
+                        {
+                            lock_guard<mutex> lock(send_mutex);
+                            send(client_socket, user_list.c_str(), user_list.size(), 0);
+                        }
                     }
                     else if(function == "/list_groups"){
                         string group_list = "Groups available:\n";
@@ -281,11 +345,17 @@ void handle_client(int client_socket) {
                                 group_list += group.first + "\n";
                             }
                         }
-                        send(client_socket, group_list.c_str(), group_list.size(), 0);
+                        {
+                            lock_guard<mutex> lock(send_mutex);
+                            send(client_socket, group_list.c_str(), group_list.size(), 0);
+                        }
                     }
                     else {
                         string invalid_command = "Error: Invalid command.\n";
-                        send(client_socket, invalid_command.c_str(), invalid_command.size(), 0);
+                        {
+                            lock_guard<mutex> lock(send_mutex);
+                            send(client_socket, invalid_command.c_str(), invalid_command.size(), 0);
+                        }
                     }
                 }
             }
@@ -304,14 +374,20 @@ void handle_client(int client_socket) {
         }
         else {
             string failure_message = "Authentication failed. Disconnecting...\n";
-            send(client_socket, failure_message.c_str(), failure_message.size(), 0);
+            {
+                lock_guard<mutex> lock(send_mutex);
+                send(client_socket, failure_message.c_str(), failure_message.size(), 0);
+            }
             close(client_socket);
             return;
         }
     }
     else {
         string failure_message = "Authentication failed. Disconnecting...\n";
-        send(client_socket, failure_message.c_str(), failure_message.size(), 0);
+        {
+            lock_guard<mutex> lock(send_mutex);
+            send(client_socket, failure_message.c_str(), failure_message.size(), 0);
+        }
         close(client_socket);
         return;
     }
