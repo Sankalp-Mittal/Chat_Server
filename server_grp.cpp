@@ -40,7 +40,7 @@ void listen_for_exit_command() {
             if(clients.size()!=0){
                 {
                     lock_guard<mutex> lock(cout_mutex);
-                    cout<<"Error: There are still clients connected. Please disconnect all clients before shutting down the server.\n";
+                    std::cout<<"Error: There are still clients connected. Please disconnect all clients before shutting down the server.\n";
                     continue;
                 }
             }
@@ -156,7 +156,7 @@ void handle_client(int client_socket) {
 
             {
                 lock_guard<mutex> lock(cout_mutex);
-                cout << "User " << username << " authenticated successfully." << endl;
+                std::cout << "User " << username << " authenticated successfully." << endl;
             }
 
             string interaction_message = "You are now connected to the server.\n";
@@ -170,15 +170,21 @@ void handle_client(int client_socket) {
                     buffer[message] = '\0';
                     string input(buffer);
                     space_pos = input.find(' ');
-                    string function = input.substr(0, space_pos);
-                    string information = input.substr(space_pos + 1);
                 
                     {
                         lock_guard<mutex> lock(cout_mutex);
                         string message = "[" + username+ "]" + ": " + input + "\n";
-                        cout<<message<<"\n";
+                        std::cout<<message<<"\n";
                     }
-
+                    string function;
+                    string information;
+                    if(space_pos == string::npos){
+                        function = input;
+                    }
+                    else{
+                        function = input.substr(0, space_pos);
+                        information = input.substr(space_pos + 1);
+                    }
                     if(function == "/broadcast"){
                         string final_message = "[Broadcast message by " + username + "]: " + information;
                         {
@@ -257,6 +263,26 @@ void handle_client(int client_socket) {
                         send(client_socket, exit_message.c_str(), exit_message.size(), 0);
                         break;
                     }
+                    else if(function == "/list_users"){
+                        string user_list = "Users connected to the server:\n";
+                        {
+                            lock_guard<mutex> lock(user_mutex);
+                            for (auto &user : clients) {
+                                user_list += user.second + "\n";
+                            }
+                        }
+                        send(client_socket, user_list.c_str(), user_list.size(), 0);
+                    }
+                    else if(function == "/list_groups"){
+                        string group_list = "Groups available:\n";
+                        {
+                            lock_guard<mutex> lock(group_mutex);
+                            for (auto &group : groups) {
+                                group_list += group.first + "\n";
+                            }
+                        }
+                        send(client_socket, group_list.c_str(), group_list.size(), 0);
+                    }
                     else {
                         string invalid_command = "Error: Invalid command.\n";
                         send(client_socket, invalid_command.c_str(), invalid_command.size(), 0);
@@ -273,7 +299,7 @@ void handle_client(int client_socket) {
 
             {
                 lock_guard<mutex> lock(cout_mutex);
-                cout << "User " << username << " disconnected." << endl;
+                std::cout << "User " << username << " disconnected." << endl;
             }
         }
         else {
@@ -353,7 +379,7 @@ int main() {
 
     {
         lock_guard<mutex> lock(cout_mutex);
-        cout << "Server is listening on port " << PORT << "..." << endl;
+        std::cout << "Server is listening on port " << PORT << "..." << endl;
     }
 
     // TODO
@@ -384,7 +410,7 @@ int main() {
 
         {
             lock_guard<mutex> lock(cout_mutex);
-            cout << "Connection established with a client." << endl;
+            std::cout << "Connection established with a client." << endl;
         }
 
         // Handle the client in a separate thread
@@ -392,19 +418,19 @@ int main() {
     }
 
     // Server is shutting down
-    cout << "Server is shutting down..." << endl;
+    std::cout << "Server is shutting down..." << endl;
 
     // Close all client sockets
     for (auto client_socket : clients) {
         close(client_socket.first);
     }
 
-    cout<<"Closing server socket..."<<endl;
+    std::cout<<"Closing server socket..."<<endl;
 
     // Close the server socket
     close(server_fd);
 
-    cout<<"Server socket closed."<<endl;
+    std::cout<<"Server socket closed."<<endl;
 
     // Join all client threads
     for (thread &t : threads) {
@@ -413,13 +439,13 @@ int main() {
         }
     }
 
-    cout<<"All client threads joined."<<endl;
+    std::cout<<"All client threads joined."<<endl;
 
     // Join the exit thread
     if (exit_thread.joinable()) {
         exit_thread.join();
     }
 
-    cout << "Server has shut down cleanly." << endl;
+    std::cout << "Server has shut down cleanly." << endl;
     return 0;
 }
