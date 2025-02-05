@@ -29,7 +29,7 @@ For "user" it appears as
 [<sender>]: <your message>
 ```
 4. **Group Management**:
-   - A user can create a group that doesn't already exist, but this __group name__ cannot have spaces.
+   - A user can create a group that doesn't already exist, but this group name __cannot have spaces__.
    ```
    /create_group <group name>
    ```
@@ -76,7 +76,7 @@ For "user" it appears as
 
 ### Mutex Synchronization
 
-- Mutexes (`cout_mutex`, `user_mutex`, `group_mutex`) are used to ensure thread-safe operations on shared data structures.
+- Mutexes (`cout_mutex`, `user_mutex`, `group_mutex`, `send_mutex`) are used to ensure thread-safe operations on shared data structures.
 - **Reason**: Prevents data races and inconsistencies when multiple threads access or modify shared resources.
 
 ### Atomic Shutdown Flag
@@ -97,7 +97,7 @@ For "user" it appears as
 
    - `main()`: Initializes the server, loads user data, and starts the listener loop.
    - `handle_client()`: Handles authentication and command processing for a connected client.
-   - `message_person()`: 
+   - `message_person()`: Sends a message to the specified client
    - `broadcast_message()`: Sends a message to all clients except the sender.
    - `create_group()`: Creates a new group and notifies users.
    - `group_message()`: Sends messages within a group.
@@ -138,11 +138,11 @@ flowchart LR
     
     subgraph Command Handling Loop
         F --> G{Command Type?}
-        G --> H[&#47;broadcast] --> I[Send Broadcast Message]
-        G --> J[&#47;msg] --> K[Send Private Message]
-        G --> L[&#47;create_group] --> M[Create Group]
-        G --> N[&#47;group_msg] --> O[Send Group Message]
-        G --> P[&#47;exit] --> Q[Close Client Connection]
+        G --> H[#47;broadcast] --> I[Send Broadcast Message]
+        G --> J[#47;msg] --> K[Send Private Message]
+        G --> L[#47;create_group] --> M[Create Group]
+        G --> N[#47;group_msg] --> O[Send Group Message]
+        G --> P[#47;exit] --> Q[Close Client Connection]
     end
     
     Q --> R[Remove User from Active Clients]
