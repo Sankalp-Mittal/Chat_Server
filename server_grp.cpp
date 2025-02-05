@@ -92,7 +92,10 @@ void create_group(const string &group_name, int client_socket) {
     if (groups.find(group_name) == groups.end()) {
         groups[group_name].insert(client_socket);
         string group_created = "Group " + group_name + " has been created by " + clients[client_socket] + ".\n";
-        broadcast_message(group_created, client_socket);
+        {
+            lock_guard<mutex> lock(send_mutex);
+            broadcast_message(group_created, client_socket);
+        }
     }
     else {
         string group_exists = "Error: Group already exists.\n";
