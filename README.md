@@ -142,6 +142,10 @@ flowchart LR
         G --> J[#47;msg] --> K[Send Private Message]
         G --> L[#47;create_group] --> M[Create Group]
         G --> N[#47;group_msg] --> O[Send Group Message]
+        G --> S[#47;join_group] --> T[Join Specified Group]
+        G --> U[#47;leave_group] --> V[Leave Specified Group]
+        G --> X[#47;list_users] --> Y[List all active users]
+        G --> Z[#47;list_groups] --> AA[List all groups]
         G --> P[#47;exit] --> Q[Close Client Connection]
     end
     
