@@ -132,11 +132,11 @@ flowchart LR
     
     subgraph Command Handling Loop
         F --> G{Command Type?}
-        G --> H[/broadcast] --> I[Send Broadcast Message]
-        G --> J[/msg] --> K[Send Private Message]
-        G --> L[/create_group] --> M[Create Group]
-        G --> N[/group_msg] --> O[Send Group Message]
-        G --> P[/exit] --> Q[Close Client Connection]
+        G --> H[&#47;broadcast] --> I[Send Broadcast Message]
+        G --> J[&#47;msg] --> K[Send Private Message]
+        G --> L[&#47;create_group] --> M[Create Group]
+        G --> N[&#47;group_msg] --> O[Send Group Message]
+        G --> P[&#47;exit] --> Q[Close Client Connection]
     end
     
     Q --> R[Remove User from Active Clients]
