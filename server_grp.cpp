@@ -40,7 +40,7 @@ void listen_for_exit_command() {
             if(clients.size()!=0){
                 {
                     lock_guard<mutex> lock(cout_mutex);
-                    cout<<"There are still clients connected. Please disconnect all clients before shutting down the server.\n";
+                    cout<<"Error: There are still clients connected. Please disconnect all clients before shutting down the server.\n";
                     continue;
                 }
             }
@@ -64,7 +64,7 @@ void message_person(const string &message, int sender_socket, string receiver) {
         send(user_socket[receiver], message.c_str(), message.size(), 0);
     }
     else{
-        string user_not_found = "User not found.\n";
+        string user_not_found = "Error: User not found.\n";
         send(sender_socket, user_not_found.c_str(), user_not_found.size(), 0);
     }
 }
@@ -72,7 +72,7 @@ void message_person(const string &message, int sender_socket, string receiver) {
 void create_group(const string &group_name, int client_socket) {
     size_t space_pos = group_name.find(' ');
     if (space_pos != string::npos) {
-        string invalid_group_name = "Group name cannot contain spaces.\n";
+        string invalid_group_name = "Error: Group name cannot contain spaces.\n";
         send(client_socket, invalid_group_name.c_str(), invalid_group_name.size(), 0);
         return;
     }
@@ -82,7 +82,7 @@ void create_group(const string &group_name, int client_socket) {
         broadcast_message(group_created, client_socket);
     }
     else {
-        string group_exists = "Group already exists.\n";
+        string group_exists = "Error: Group already exists.\n";
         send(client_socket, group_exists.c_str(), group_exists.size(), 0);
     }
 }
@@ -90,7 +90,7 @@ void create_group(const string &group_name, int client_socket) {
 void group_message(const string &message, int sender_socket, string group) {
     if (groups.find(group) != groups.end()) {
         if (groups[group].find(sender_socket) == groups[group].end()) {
-            string not_in_group = "You are not part of this group.\n";
+            string not_in_group = "Error: You are not part of this group.\n";
             send(sender_socket, not_in_group.c_str(), not_in_group.size(), 0);
             return;
         }
@@ -101,7 +101,7 @@ void group_message(const string &message, int sender_socket, string group) {
         }
     }
     else {
-        string group_not_found = "Group not found.\n";
+        string group_not_found = "Error: Group not found.\n";
         send(sender_socket, group_not_found.c_str(), group_not_found.size(), 0);
     }
 }
@@ -141,7 +141,7 @@ void handle_client(int client_socket) {
                 lock_guard<mutex> lock(user_mutex);
                 for (auto &user : clients) {
                     if (user.second == username) {
-                        string already_connected = "User already connected. Disconnecting...\n";
+                        string already_connected = "Error: User already connected. Disconnecting...\n";
                         send(client_socket, already_connected.c_str(), already_connected.size(), 0);
                         close(client_socket);
                         return;
@@ -213,7 +213,7 @@ void handle_client(int client_socket) {
                                 send(client_socket, alert.c_str(), alert.size(), 0);
                             }
                             else {
-                                string group_not_found = "Group not found.\n";
+                                string group_not_found = "Error: Group not found.\n";
                                 send(client_socket, group_not_found.c_str(), group_not_found.size(), 0);
                             }
                         }
@@ -223,7 +223,7 @@ void handle_client(int client_socket) {
                             lock_guard<mutex> lock(group_mutex);
                             if (groups.find(information) != groups.end()) {
                                 if(groups[information].find(client_socket) == groups[information].end()){
-                                    string not_in_group = "You are not part of this group.\n";
+                                    string not_in_group = "Error: You are not part of this group.\n";
                                     send(client_socket, not_in_group.c_str(), not_in_group.size(), 0);
                                     continue;
                                 }
@@ -237,7 +237,7 @@ void handle_client(int client_socket) {
 
                             }
                             else {
-                                string group_not_found = "Group not found.\n";
+                                string group_not_found = "Error: Group not found.\n";
                                 send(client_socket, group_not_found.c_str(), group_not_found.size(), 0);
                             }
                         }
@@ -258,7 +258,7 @@ void handle_client(int client_socket) {
                         break;
                     }
                     else {
-                        string invalid_command = "Invalid command.\n";
+                        string invalid_command = "Error: Invalid command.\n";
                         send(client_socket, invalid_command.c_str(), invalid_command.size(), 0);
                     }
                 }
@@ -356,10 +356,10 @@ int main() {
         cout << "Server is listening on port " << PORT << "..." << endl;
     }
 
-    fcntl(server_fd, F_SETFL, O_NONBLOCK);
+    fcntl(server_fd, F_SETFL, O_NONBLOCK); // Make the server socket non-blocking
 
     thread exit_thread(listen_for_exit_command);
-    exit_thread.detach();
+    exit_thread.detach(); //listen for the exit command in the background
 
     vector<thread> threads;
 
