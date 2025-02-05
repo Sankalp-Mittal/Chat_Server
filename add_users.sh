@@ -6,7 +6,7 @@ FILE="users.txt"  # File to store usernames and passwords
 touch "$FILE"
 
 # Add 100 users
-for i in $(seq 1 100); do
+for i in $(seq 101 1000); do
     username="user$i"
     password="password$i"
 
