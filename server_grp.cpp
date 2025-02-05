@@ -93,7 +93,7 @@ void create_group(const string &group_name, int client_socket) {
         groups[group_name].insert(client_socket);
         string group_created = "Group " + group_name + " has been created by " + clients[client_socket] + ".\n";
         {
-            lock_guard<mutex> lock(send_mutex);
+            lock_guard<mutex> lock(user_mutex);
             broadcast_message(group_created, client_socket);
         }
     }
@@ -431,7 +431,7 @@ int main() {
     }
 
     //Set socket options to reuse address and port
-    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt))) {
+    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))) {
         perror("Setsockopt failed");
         close(server_fd);
         exit(EXIT_FAILURE);
@@ -462,7 +462,7 @@ int main() {
     }
 
     // TODO
-    //fcntl(server_fd, F_SETFL, O_NONBLOCK); // Make the server socket non-blocking
+    fcntl(server_fd, F_SETFL, O_NONBLOCK); // Make the server socket non-blocking
 
     thread exit_thread(listen_for_exit_command);
     exit_thread.detach(); //listen for the exit command in the background

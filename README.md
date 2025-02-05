@@ -6,12 +6,55 @@
 
 1. **Authentication**: Users can log in with a username and password.
 2. **Broadcast Messaging**: Users can send messages to all connected clients.
+This can be done as
+```
+/broadcast <your message>
+```
+For other users it appears as
+```
+[Broadcast message by <user>]: <your message>
+```
 3. **Private Messaging**: Users can send direct messages to specific connected clients.
+```
+/msg <user> <your message>
+```
+For "user" it appears as
+```
+[<sender>]: <your message>
+```
 4. **Group Management**:
    - A user can create a group that doesn't already exist.
+   ```
+   /create_group <group name>
+   ```
+   It appears as
+   ```
+   Group <group name> has been created by <user>.
+   ```
    - Any user can join or leave an existing group.
+   ```
+   /join_group <group name>
+   /leave_group <group name>
+   ```
+   This will be informed to all members of the group
    - Any member of the group can send messages.
-5. **Server Shutdown**: Admin can shut down the server with an `/exit` command.
+   ```
+   /group_msg <group name> <your message>
+   ```
+   At appears as
+   ```
+   [<group name> - <user>]: <your message>
+   ```
+5. **List Functionalities**
+    - Any user can list down all the active users that are connected to the server
+    ```
+    /list_users
+    ```
+    - Any user can list down all the groups that exist on the server
+    ```
+    /list_groups
+    ```
+6. **Server Shutdown**: Admin can shut down the server with an `/exit` command.
 
 ### Not Implemented Features
 
@@ -54,20 +97,62 @@
    - `group_message()`: Sends messages within a group.
    - `listen_for_exit_command()`: Monitors the console for the `/exit` command.
 
-### Code Flow
+### Server Code Flow
 
-- **Server:**
+The following diagrams describe the main components of the server's code execution:
 
-  1. Start the server and load user credentials.
-  2. Listen for new connections and spawn a thread for each client.
-  3. Handle client commands and messages.
-  4. Shut down upon receiving the `/exit` command.
+#### 1. Server Initialization
+```mermaid
+flowchart LR
+    A[Start Server] --> B[Load User Credentials]
+    B --> C[Create Server Socket]
+    C --> D[Set Socket Options]
+    D --> E[Bind to Address & Port]
+    E --> F[Start Listening for Connections]
+```
+#### 2. Handling new connections
 
-- **Client:**
+```mermaid
+flowchart LR
+    A[New Client Connection] --> B[Accept Connection]
+    B --> C{Server Shutdown?}
+    C -- No --> D[Create New Thread for Client]
+    D --> E[Handle Client Authentication]
+    C -- Yes --> F[Reject Connection]
+```
+#### 3. Client Communication (Thread)
 
-  1. Connect to the server.
-  2. Authenticate with a username and password.
-  3. Continuously handle server messages and send user input.
+```mermaid
+flowchart LR
+    A[Client Thread Start] --> B[Send Authentication Request]
+    B --> C{Valid Credentials?}
+    C -- Yes --> D[Add User to Active Clients]
+    C -- No --> E[Send Authentication Failure]
+    D --> F[Wait for Client Commands]
+    
+    subgraph Command Handling Loop
+        F --> G{Command Type?}
+        G --> H[/broadcast] --> I[Send Broadcast Message]
+        G --> J[/msg] --> K[Send Private Message]
+        G --> L[/create_group] --> M[Create Group]
+        G --> N[/group_msg] --> O[Send Group Message]
+        G --> P[/exit] --> Q[Close Client Connection]
+    end
+    
+    Q --> R[Remove User from Active Clients]
+```
+#### 4. Server Shutdown
+
+```mermaid
+flowchart LR
+    A[Admin Issues /exit Command] --> B{Active Clients Connected?}
+    B -- No --> C[Set Shutdown Flag]
+    B -- Yes --> D[Print Error Message]
+    C --> E[Stop Accepting New Connections]
+    E --> F[Close All Sockets]
+    F --> G[Join All Client Threads]
+    G --> H[Server Shutdown Complete]
+```
 
 ## Testing
 
