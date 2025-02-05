@@ -242,9 +242,9 @@ interact
 
 ## Restrictions
 
-- **Maximum Clients:** No fixed limit; depends on system resources. Can support upto 200 users on a regular system.
+- **Maximum Clients:** No fixed limit; depends on system resources. Can support upto 250 users on our system.
 - **Maximum Groups:** No fixed limit; dynamically managed.
-- **Maximum Group Members:** No fixed limit; determined by server performance.
+- **Maximum Group Members:** No fixed limit; dynamically managed.
 - **Maximum Message Size:** 1024 bytes.
 
 ## Challenges
@@ -260,6 +260,10 @@ interact
 3. **Authentication Logic**: Difficulty in ensuring unique logins.
 
    - **Solution**: Checked for duplicate usernames before granting access.
+
+4. **Server Shutdown**: Difficulty in shutting down server and freeing up the used port
+
+    - **Solution**: Made the port non-blocking using `fcntl(server_fd, F_SETFL, O_NONBLOCK);`
 
 ## Scenarios and Behavior
 
