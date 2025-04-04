@@ -83,21 +83,25 @@ void message_person(const string &message, int sender_socket, string receiver) {
 
 // creates a group
 void create_group(const string &group_name, int client_socket) {
-    size_t space_pos = group_name.find(' ');
-    if (space_pos != string::npos) {
-        string invalid_group_name = "Error: Group name cannot contain spaces.\n";
-        {
-            lock_guard<mutex> lock(send_mutex); 
-            send(client_socket, invalid_group_name.c_str(), invalid_group_name.size(), 0);
-        }
-        return;
-    }
+    // size_t space_pos = group_name.find(' ');
+    // if (space_pos != string::npos) {
+    //     string invalid_group_name = "Error: Group name cannot contain spaces.\n";
+    //     {
+    //         lock_guard<mutex> lock(send_mutex); 
+    //         send(client_socket, invalid_group_name.c_str(), invalid_group_name.size(), 0);
+    //     }
+    //     return;
+    // }
     if (groups.find(group_name) == groups.end()) {
         groups[group_name].insert(client_socket);
         string group_created = "Group " + group_name + " has been created by " + clients[client_socket] + ".\n";
         {
             lock_guard<mutex> lock(user_mutex);
             broadcast_message(group_created, client_socket);
+        }
+        {
+            lock_guard<mutex> lock(send_mutex);
+            send(client_socket, group_created.c_str(), group_created.size(), 0);
         }
     }
     else {
@@ -227,149 +231,163 @@ void handle_client(int client_socket) {
                 if(message>0){
                     buffer[message] = '\0';
                     string input(buffer);
-                    space_pos = input.find(' ');
-                
-                    {
-                        lock_guard<mutex> lock(cout_mutex);
-                        string message = "[" + username+ "]" + ": " + input + "\n";
-                        std::cout<<message<<"\n";
-                    }
-                    string function;
-                    string information;
-                    if(space_pos == string::npos){
-                        function = input;
-                    }
-                    else{
-                        function = input.substr(0, space_pos);
-                        information = input.substr(space_pos + 1);
-                    }
-                    if(function == "/broadcast"){
-                        string final_message = "[Broadcast message by " + username + "]: " + information;
+                    bool flag_more_info = true;
+                    while(flag_more_info){
+                        space_pos = input.find(' ');
+                    
                         {
-                            lock_guard<mutex> lock(user_mutex);
-                            broadcast_message(final_message, client_socket);
+                            lock_guard<mutex> lock(cout_mutex);
+                            string message = "[" + username+ "]" + ": " + input + "\n";
+                            std::cout<<message<<"\n";
                         }
-                    }
-                    else if(function == "/msg"){
-                        int second_space = information.find(' ');
-                        string receiver = information.substr(0, second_space);
-                        string message = information.substr(second_space + 1);
-                        string final_message = "[" + username + "]: " + message;
-                        {
-                            lock_guard<mutex> lock(user_mutex);
-                            message_person(final_message, client_socket, receiver);
+                        string function;
+                        string information;
+                        if(space_pos == string::npos){
+                            function = input;
                         }
-                    }
-                    else if (function == "/create_group") {
-                        {
-                            lock_guard<mutex> lock(group_mutex);
-                            create_group(information, client_socket);
+                        else{
+                            function = input.substr(0, space_pos);
+                            information = input.substr(space_pos + 1);
                         }
-                    }
-                    else if (function == "/join_group") {
-                        {
-                            lock_guard<mutex> lock(group_mutex);
-                            if (groups.find(information) != groups.end()) {
-                                groups[information].insert(client_socket);
-                                string joined_group = username + " has joined the group " + information + ".\n";
-                                group_message(joined_group, client_socket, information);
-                                string alert = "You have joined the group " + information + ".\n";
-                                {
-                                    lock_guard<mutex> lock(send_mutex);
-                                    send(client_socket, alert.c_str(), alert.size(), 0);
-                                }
-                            }
-                            else {
-                                string group_not_found = "Error: Group not found.\n";
-                                {
-                                    lock_guard<mutex> lock(send_mutex);
-                                    send(client_socket, group_not_found.c_str(), group_not_found.size(), 0);
-                                }
+                        size_t slash_pos = information.find('/');
+                        string information_cp = information;
+                        if (slash_pos != string::npos) {
+                            information = information_cp.substr(0,slash_pos);
+                            input = information_cp.substr(slash_pos);
+                            flag_more_info = true;
+                        }
+                        else{
+                            flag_more_info = false;
+                        }
+                        
+                        if(function == "/broadcast"){
+                            string final_message = "[Broadcast message by " + username + "]: " + information;
+                            {
+                                lock_guard<mutex> lock(user_mutex);
+                                broadcast_message(final_message, client_socket);
                             }
                         }
-                    }
-                    else if (function == "/leave_group") {
-                        {
-                            lock_guard<mutex> lock(group_mutex);
-                            if (groups.find(information) != groups.end()) {
-                                if(groups[information].find(client_socket) == groups[information].end()){
-                                    string not_in_group = "Error: You are not part of this group.\n";
-                                    {
-                                        lock_guard<mutex> lock(send_mutex);
-                                        send(client_socket, not_in_group.c_str(), not_in_group.size(), 0);
-                                    }
-                                    continue;
-                                }
-                                else{
-                                    string left_group = username + " has left the group " + information + ".\n";
-                                    group_message(left_group, client_socket, information);
-                                    string alert = "You have left the group " + information + ".\n";
+                        else if(function == "/msg"){
+                            int second_space = information.find(' ');
+                            string receiver = information.substr(0, second_space);
+                            string message = information.substr(second_space + 1);
+                            string final_message = "[" + username + "]: " + message;
+                            {
+                                lock_guard<mutex> lock(user_mutex);
+                                message_person(final_message, client_socket, receiver);
+                            }
+                        }
+                        else if (function == "/create_group") {
+                            {
+                                lock_guard<mutex> lock(group_mutex);
+                                create_group(information, client_socket);
+                            }
+                        }
+                        else if (function == "/join_group") {
+                            {
+                                lock_guard<mutex> lock(group_mutex);
+                                if (groups.find(information) != groups.end()) {
+                                    groups[information].insert(client_socket);
+                                    string joined_group = username + " has joined the group " + information + ".\n";
+                                    group_message(joined_group, client_socket, information);
+                                    string alert = "You have joined the group " + information + ".\n";
                                     {
                                         lock_guard<mutex> lock(send_mutex);
                                         send(client_socket, alert.c_str(), alert.size(), 0);
                                     }
-                                    groups[information].erase(client_socket);
                                 }
+                                else {
+                                    string group_not_found = "Error: Group not found.\n";
+                                    {
+                                        lock_guard<mutex> lock(send_mutex);
+                                        send(client_socket, group_not_found.c_str(), group_not_found.size(), 0);
+                                    }
+                                }
+                            }
+                        }
+                        else if (function == "/leave_group") {
+                            {
+                                lock_guard<mutex> lock(group_mutex);
+                                if (groups.find(information) != groups.end()) {
+                                    if(groups[information].find(client_socket) == groups[information].end()){
+                                        string not_in_group = "Error: You are not part of this group.\n";
+                                        {
+                                            lock_guard<mutex> lock(send_mutex);
+                                            send(client_socket, not_in_group.c_str(), not_in_group.size(), 0);
+                                        }
+                                        continue;
+                                    }
+                                    else{
+                                        string left_group = username + " has left the group " + information + ".\n";
+                                        group_message(left_group, client_socket, information);
+                                        string alert = "You have left the group " + information + ".\n";
+                                        {
+                                            lock_guard<mutex> lock(send_mutex);
+                                            send(client_socket, alert.c_str(), alert.size(), 0);
+                                        }
+                                        groups[information].erase(client_socket);
+                                    }
 
-                            }
-                            else {
-                                string group_not_found = "Error: Group not found.\n";
-                                {
-                                    lock_guard<mutex> lock(send_mutex);
-                                    send(client_socket, group_not_found.c_str(), group_not_found.size(), 0);
+                                }
+                                else {
+                                    string group_not_found = "Error: Group not found.\n";
+                                    {
+                                        lock_guard<mutex> lock(send_mutex);
+                                        send(client_socket, group_not_found.c_str(), group_not_found.size(), 0);
+                                    }
                                 }
                             }
                         }
-                    }
-                    else if (function == "/group_msg") {
-                        int second_space = information.find(' ');
-                        string group = information.substr(0, second_space);
-                        string message = information.substr(second_space + 1);
-                        string final_message = "[" + group + " - " + username + "]: " + message;
-                        {
-                            lock_guard<mutex> lock(group_mutex);
-                            group_message(final_message, client_socket, group);
-                        }
-                    }
-                    else if(function == "/exit"){
-                        string exit_message = "Exiting...\n";
-                        {
-                            lock_guard<mutex> lock(send_mutex);
-                            send(client_socket, exit_message.c_str(), exit_message.size(), 0);
-                        }
-                        break;
-                    }
-                    else if(function == "/list_users"){
-                        string user_list = "Users connected to the server:\n";
-                        {
-                            lock_guard<mutex> lock(user_mutex);
-                            for (auto &user : clients) {
-                                user_list += user.second + "\n";
+                        else if (function == "/group_msg") {
+                            int second_space = information.find(' ');
+                            string group = information.substr(0, second_space);
+                            string message = information.substr(second_space + 1);
+                            string final_message = "[" + group + " - " + username + "]: " + message;
+                            {
+                                lock_guard<mutex> lock(group_mutex);
+                                group_message(final_message, client_socket, group);
                             }
                         }
-                        {
-                            lock_guard<mutex> lock(send_mutex);
-                            send(client_socket, user_list.c_str(), user_list.size(), 0);
+                        else if(function == "/exit"){
+                            string exit_message = "Exiting...\n";
+                            {
+                                lock_guard<mutex> lock(send_mutex);
+                                send(client_socket, exit_message.c_str(), exit_message.size(), 0);
+                            }
+                            break;
                         }
-                    }
-                    else if(function == "/list_groups"){
-                        string group_list = "Groups available:\n";
-                        {
-                            lock_guard<mutex> lock(group_mutex);
-                            for (auto &group : groups) {
-                                group_list += group.first + "\n";
+                        else if(function == "/list_users"){
+                            string user_list = "Users connected to the server:\n";
+                            {
+                                lock_guard<mutex> lock(user_mutex);
+                                for (auto &user : clients) {
+                                    user_list += user.second + "\n";
+                                }
+                            }
+                            {
+                                lock_guard<mutex> lock(send_mutex);
+                                send(client_socket, user_list.c_str(), user_list.size(), 0);
                             }
                         }
-                        {
-                            lock_guard<mutex> lock(send_mutex);
-                            send(client_socket, group_list.c_str(), group_list.size(), 0);
+                        else if(function == "/list_groups"){
+                            string group_list = "Groups available:\n";
+                            {
+                                lock_guard<mutex> lock(group_mutex);
+                                for (auto &group : groups) {
+                                    group_list += group.first + "\n";
+                                }
+                            }
+                            {
+                                lock_guard<mutex> lock(send_mutex);
+                                send(client_socket, group_list.c_str(), group_list.size(), 0);
+                            }
                         }
-                    }
-                    else {
-                        string invalid_command = "Error: Invalid command.\n";
-                        {
-                            lock_guard<mutex> lock(send_mutex);
-                            send(client_socket, invalid_command.c_str(), invalid_command.size(), 0);
+                        else {
+                            string invalid_command = "Error: Invalid command.\n";
+                            {
+                                lock_guard<mutex> lock(send_mutex);
+                                send(client_socket, invalid_command.c_str(), invalid_command.size(), 0);
+                            }
                         }
                     }
                 }
